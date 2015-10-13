@@ -4,14 +4,12 @@ cordova-plugin-mauron85-background-geolocation-phonegapbuild
 Fork notice
 ==============================
 
-This is fork of my [cordova-plugin-background-geolocation](https://github.com/mauron85/cordova-plugin-background-geolocation).
+This is fork of [cordova-plugin-mauron85-background-geolocation](https://github.com/mauron85/cordova-plugin-background-geolocation).
 The only reason to fork is that [Adobe® PhoneGap™ Build](http://build.phonegap.com) does not support external frameworks like google-play-services directly.
 
 The documentation and code base will stay at former location [cordova-plugin-background-geolocation](https://github.com/mauron85/cordova-plugin-background-geolocation).
 
 ## Registering plugin for Adobe® PhoneGap™ Build
-
-[Adobe® PhoneGap™ Build](http://build.phonegap.com) supports plugins from npm as well.
 
 To register plugin add following line into your config.xml:
 
