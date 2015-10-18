@@ -1,6 +1,6 @@
 {
   "name": "cordova-plugin-mauron85-background-geolocation-phonegapbuild",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "Cordova Background GeoLocation Plugin",
   "cordova": {
     "id": "cordova-plugin-mauron85-background-geolocation-phonegapbuild",
@@ -15,12 +15,16 @@
     "url": "git+https://github.com/mauron85/cordova-plugin-mauron85-background-geolocation-phonegapbuild.git"
   },
   "keywords": [
-    "phonegap",
-    "background geolocation",
+    "gps",
+    "location",
+    "geolocation",
+    "background",
     "ecosystem:cordova",
     "cordova-android",
     "cordova-ios",
-    "cordova-wp8"
+    "cordova-wp8",
+    "cordova",
+    "phonegap"
   ],
   "engines": [
     {
