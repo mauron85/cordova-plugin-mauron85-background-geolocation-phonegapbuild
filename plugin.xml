@@ -3,7 +3,7 @@
 <plugin xmlns="http://www.phonegap.com/ns/plugins/1.0"
         xmlns:android="http://schemas.android.com/apk/res/android"
         id="cordova-plugin-mauron85-background-geolocation-phonegapbuild"
-        version="0.7.2">
+        version="0.7.3">
     <name>CDVBackgroundGeoLocation</name>
     <description>Cordova Background GeoLocation Plugin</description>
     <license>Apache-2.0</license>
@@ -42,11 +42,11 @@
             <meta-data android:name="com.google.android.gms.version" android:value="@integer/google_play_services_version" />
 
             <service android:enabled="true" android:exported="false" android:name="com.tenforwardconsulting.cordova.bgloc.DistanceFilterLocationService"
-                     android:process=":remote">
+                     android:process=":remote" android:stopWithTask="false">
             </service>
 
             <service android:enabled="true" android:exported="false" android:name="com.tenforwardconsulting.cordova.bgloc.FusedLocationService"
-                     android:process=":remote">
+                     android:process=":remote" android:stopWithTask="false">
             </service>
         </config-file>
 
