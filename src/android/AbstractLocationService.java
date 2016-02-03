@@ -10,12 +10,15 @@ This is a new class
 package com.tenforwardconsulting.cordova.bgloc;
 
 import android.annotation.TargetApi;
+import android.app.Activity;
 import android.app.Notification;
+import android.app.AlarmManager;
 import android.support.v4.app.NotificationCompat;
 import android.app.Service;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -26,11 +29,13 @@ import android.media.ToneGenerator;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
 import android.widget.Toast;
 
 import com.marianhello.cordova.bgloc.Config;
 import com.marianhello.cordova.bgloc.Constant;
+import com.marianhello.cordova.bgloc.ServiceProvider;
 import com.tenforwardconsulting.cordova.bgloc.data.LocationProxy;
 import com.tenforwardconsulting.cordova.bgloc.data.LocationDAO;
 import com.tenforwardconsulting.cordova.bgloc.data.DAOFactory;
@@ -42,20 +47,21 @@ public abstract class AbstractLocationService extends Service {
     private static final String TAG = "AbstractLocationService";
 
     protected Config config;
-    protected String activity;
+    private Boolean isActionReceiverRegistered = false;
 
     protected Location lastLocation;
     protected ToneGenerator toneGenerator;
-    protected Boolean mainActivityDestroyed = false;
 
     private BroadcastReceiver actionReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             Bundle data = intent.getExtras();
             switch (data.getInt(Constant.ACTION)) {
-                case Constant.ACTION_ACTIVITY_KILLED:
-                    Log.w(TAG, "Main activity was killed! Start persisting locations from now.");
-                    mainActivityDestroyed = data.getBoolean(Constant.DATA);
+                case Constant.ACTION_START_RECORDING:
+                    startRecording();
+                    break;
+                case Constant.ACTION_STOP_RECORDING:
+                    stopRecording();
                     break;
                 default:
                     break;
@@ -74,15 +80,18 @@ public abstract class AbstractLocationService extends Service {
     public void onCreate() {
         super.onCreate();
         toneGenerator = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+
+        // Receiver for actions
+        registerActionReceiver();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "Received start id " + startId + ": " + intent);
         if (intent != null) {
+            // config = Config.fromByteArray(intent.getByteArrayExtra("config"));
             config = (Config) intent.getParcelableExtra("config");
-            activity = intent.getStringExtra("activity");
-            Log.d( TAG, "Got activity" + activity );
+            Log.i(TAG, "Config: " + config.toString());
 
             // Build a Notification required for running service in foreground.
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
@@ -103,11 +112,9 @@ public abstract class AbstractLocationService extends Service {
             notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_FOREGROUND_SERVICE | Notification.FLAG_NO_CLEAR;
             startForeground(startId, notification);
         }
-        Log.i(TAG, config.toString());
-        Log.i(TAG, "- activity: "   + activity);
 
         //We want this service to continue running until it is explicitly stopped
-        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     public Integer getPluginResource(String resourceName) {
@@ -140,18 +147,6 @@ public abstract class AbstractLocationService extends Service {
         return iconColor;
     }
 
-    @Override
-    public boolean stopService(Intent intent) {
-        Log.i(TAG, "- Received stop: " + intent);
-        cleanUp();
-        if (config.isDebugging()) {
-            Toast.makeText(this, "Background location tracking stopped", Toast.LENGTH_SHORT).show();
-        }
-        return super.stopService(intent); // not needed???
-    }
-
-    protected abstract void cleanUp();
-
     /**
      * Plays debug sound
      * @param name
@@ -176,19 +171,6 @@ public abstract class AbstractLocationService extends Service {
         toneGenerator.startTone(tone, duration);
     }
 
-    protected void broadcastLocation (LocationProxy location) {
-        Log.d(TAG, "Broadcasting update message: " + location.toString());
-        try {
-            String locStr = location.toJSONObject().toString();
-            Intent intent = new Intent(Constant.ACTION_FILTER);
-            intent.putExtra(Constant.ACTION, Constant.ACTION_LOCATION_UPDATE);
-            intent.putExtra(Constant.DATA, locStr);
-            this.sendBroadcast(intent);
-        } catch (JSONException e) {
-            Log.w(TAG, "Failed to broadcast location");
-        }
-    }
-
     protected void persistLocation (LocationProxy location) {
         LocationDAO dao = DAOFactory.createLocationDAO(this.getApplicationContext());
 
@@ -200,35 +182,105 @@ public abstract class AbstractLocationService extends Service {
     }
 
     protected void handleLocation (Location location) {
-        Boolean isDebugging = config.isDebugging();
-        LocationProxy bgLocation = LocationProxy.fromAndroidLocation(location);
+        final LocationProxy bgLocation = LocationProxy.fromAndroidLocation(location);
         bgLocation.setServiceProvider(config.getServiceProvider());
 
-        if (config.getStopOnTerminate() == false) {
-            if (mainActivityDestroyed) {
-                Log.d(TAG, "Persisting location. Reason: Main activity was killed.");
-                persistLocation(bgLocation);
-            } else if (isDebugging) {
-                bgLocation.setDebug(isDebugging);
-                persistLocation(bgLocation);
-            }
+        if (config.isDebugging()) {
+            bgLocation.setDebug(true);
+            persistLocation(bgLocation);
         }
 
-        broadcastLocation(bgLocation); //broadcast at all circumstances
+        Log.d(TAG, "Broadcasting update message: " + bgLocation.toString());
+        try {
+            String locStr = bgLocation.toJSONObject().toString();
+            Intent intent = new Intent(Constant.ACTION_FILTER);
+            intent.putExtra(Constant.ACTION, Constant.ACTION_LOCATION_UPDATE);
+            intent.putExtra(Constant.DATA, locStr);
+            this.sendOrderedBroadcast(intent, null, new BroadcastReceiver() {
+                // @SuppressLint("NewApi")
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    Log.d(TAG, "Final Result Receiver");
+                    Bundle results = getResultExtras(true);
+                    if (results.getString(Constant.LOCATION_SENT_INDICATOR) == null) {
+                        Log.w(TAG, "Main activity seems to be killed");
+                        if (config.getStopOnTerminate() == false) {
+                            bgLocation.setDebug(false);
+                            persistLocation(bgLocation);
+                            Log.d(TAG, "Persisting location. Reason: Main activity was killed.");
+                        }
+                    }
+              }
+            }, null, Activity.RESULT_OK, null, null);
+        } catch (JSONException e) {
+            Log.w(TAG, "Failed to broadcast location");
+        }
+    }
+
+    public Intent registerActionReceiver () {
+        if (isActionReceiverRegistered) { return null; }
+
+        isActionReceiverRegistered = true;
+        return registerReceiver(actionReceiver, new IntentFilter(Constant.ACTION_FILTER));
+    }
+
+    public void unregisterActionReceiver () {
+        if (!isActionReceiverRegistered) { return; }
+
+        unregisterReceiver(actionReceiver);
+        isActionReceiverRegistered = false;
+    }
+
+    public void startDelayed () {
+        Class serviceProviderClass = null;
+        AlarmManager alarmManager = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
+
+        try {
+            Intent serviceIntent = new Intent(this, ServiceProvider.getClass(config.getServiceProvider()));
+            serviceIntent.addFlags(Intent.FLAG_FROM_BACKGROUND);
+            serviceIntent.putExtra("config", config.toParcel().marshall());
+            PendingIntent pintent = PendingIntent.getService(this, 0, serviceIntent, 0);
+            alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + 5 * 1000, pintent);
+        } catch (ClassNotFoundException e) {
+            Log.e(TAG, "Service restart failed");
+        }
+    }
+
+    protected abstract void cleanUp();
+
+    protected abstract void startRecording();
+
+    protected abstract void stopRecording();
+
+
+    @Override
+    public boolean stopService(Intent intent) {
+        Log.i(TAG, "- Received stop: " + intent);
+        cleanUp();
+        if (config.isDebugging()) {
+            Toast.makeText(this, "Background location tracking stopped", Toast.LENGTH_SHORT).show();
+        }
+        return super.stopService(intent); // not needed???
     }
 
     @Override
     public void onDestroy() {
-        Log.w(TAG, "------------------------------------------ Destroyed Location update Service");
+        Log.w(TAG, "Destroyed Location update Service");
         toneGenerator.release();
+        unregisterActionReceiver();
         cleanUp();
+        stopForeground(true);
         super.onDestroy();
     }
 
-    @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
+    // @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        this.stopSelf();
+        Log.d(TAG, "Task has been removed");
+        unregisterActionReceiver();
+        if (config.getStopOnTerminate()) {
+            stopSelf();
+        }
         super.onTaskRemoved(rootIntent);
     }
 }

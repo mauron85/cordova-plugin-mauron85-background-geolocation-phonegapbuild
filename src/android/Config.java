@@ -32,8 +32,9 @@ public class Config implements Parcelable
     private String notificationIcon;
     private String notificationIconColor;
     private ServiceProvider serviceProvider = ServiceProvider.ANDROID_DISTANCE_FILTER;
-    private Integer interval = 900000; //milliseconds
+    private Integer interval = 600000; //milliseconds
     private Integer fastestInterval = 120000; //milliseconds
+    private Integer activitiesInterval = 1000; //milliseconds
 
     public int describeContents() {
         return 0;
@@ -55,6 +56,7 @@ public class Config implements Parcelable
         out.writeInt(getServiceProvider().asInt());
         out.writeInt(getInterval());
         out.writeInt(getFastestInterval());
+        out.writeInt(getActivitiesInterval());
     }
 
     public static final Parcelable.Creator<Config> CREATOR
@@ -87,6 +89,7 @@ public class Config implements Parcelable
         setServiceProvider(in.readInt());
         setInterval(in.readInt());
         setFastestInterval(in.readInt());
+        setActivitiesInterval(in.readInt());
     }
 
     public float getStationaryRadius() {
@@ -201,6 +204,14 @@ public class Config implements Parcelable
         this.fastestInterval = fastestInterval;
     }
 
+    public Integer getActivitiesInterval() {
+        return activitiesInterval;
+    }
+
+    public void setActivitiesInterval(Integer activitiesInterval) {
+        this.activitiesInterval = activitiesInterval;
+    }
+
     public String getLargeNotificationIcon () {
         String iconName = getNotificationIcon();
         if (iconName != null) {
@@ -228,20 +239,35 @@ public class Config implements Parcelable
     @Override
     public String toString () {
         return new StringBuffer()
-                .append("- stationaryRadius: "      + getStationaryRadius())
-                .append("- desiredAccuracy: "       + getDesiredAccuracy())
-                .append("- distanceFilter: "        + getDistanceFilter())
-                .append("- locationTimeout: "       + getLocationTimeout())
-                .append("- debugging: "             + isDebugging())
-                .append("- notificationIcon: "      + getNotificationIcon())
-                .append("- notificationIconColor: " + getNotificationIconColor())
-                .append("- notificationTitle: "     + getNotificationTitle())
-                .append("- notificationText: "      + getNotificationText())
-                .append("- stopOnTerminate: "       + getStopOnTerminate())
-                .append("- serviceProvider: "       + getServiceProvider())
-                .append("- interval: "              + getInterval())
-                .append("- fastestInterval: "       + getFastestInterval())
+                .append("stationaryRadius: "       + getStationaryRadius())
+                .append(" desiredAccuracy: "       + getDesiredAccuracy())
+                .append(" distanceFilter: "        + getDistanceFilter())
+                .append(" locationTimeout: "       + getLocationTimeout())
+                .append(" debugging: "             + isDebugging())
+                .append(" notificationIcon: "      + getNotificationIcon())
+                .append(" notificationIconColor: " + getNotificationIconColor())
+                .append(" notificationTitle: "     + getNotificationTitle())
+                .append(" notificationText: "      + getNotificationText())
+                .append(" stopOnTerminate: "       + getStopOnTerminate())
+                .append(" serviceProvider: "       + getServiceProvider())
+                .append(" interval: "              + getInterval())
+                .append(" fastestInterval: "       + getFastestInterval())
+                .append(" activitiesInterval: "    + getActivitiesInterval())
                 .toString();
+    }
+
+    public Parcel toParcel () {
+        Parcel parcel = Parcel.obtain();
+        this.writeToParcel(parcel, 0);
+        parcel.setDataPosition(0);
+        return parcel;
+    }
+
+    public static Config fromByteArray (byte[] byteArray) {
+        Parcel parcel = Parcel.obtain();
+        parcel.unmarshall(byteArray, 0, byteArray.length);
+        parcel.setDataPosition(0);
+        return Config.CREATOR.createFromParcel(parcel);
     }
 
     public static Config fromJSONArray (JSONArray data) throws JSONException {
@@ -260,6 +286,7 @@ public class Config implements Parcelable
         config.setServiceProvider(data.getInt(11));
         config.setInterval(data.getInt(12));
         config.setFastestInterval(data.getInt(13));
+        config.setActivitiesInterval(data.getInt(14));
 
         return config;
     }

@@ -1,5 +1,53 @@
 ## Changelog
 
+### [0.9.4] - 2016-01-31
+#### Fixed
+- Android 6.0 permissions issue #21
+
+### [0.9.3] - 2016-01-29
+#### Fixed
+- iOS cordova 6 compilation error
+- iOS fix for iOS 9
+
+#### Changes
+- iOS removing cordova-plugin-geolocation dependency
+- iOS user prompt for using location services
+- iOS error callback when location services are disabled
+- iOS error callback when user denied location tracking
+- iOS adding error callbacks to SampleApp
+
+### [0.9.2] - 2016-01-29
+#### Fixed
+- iOS temporarily using cordova-plugin-geolocation-ios9-fix to fix issues with iOS9
+- iOS fixing SampleApp indexedDB issues
+
+### [0.9.1] - 2015-12-18
+#### Fixed
+- Android ANDROID_FUSED_LOCATION fix config setActivitiesInterval
+
+### [0.9.0] - 2015-12-18
+#### Changed
+- Android ANDROID_FUSED_LOCATION using ActivityRecognition (saving battery)
+
+### [0.8.3] - 2015-12-18
+#### Fixed
+- Android fixing crash on exit
+
+### [0.8.2] - 2015-12-18
+#### Fixed
+- Android fixing #9 - immediate bg service crash
+
+### [0.8.1] - 2015-12-15
+#### Fixed
+- Android fixing #9
+
+### [0.8.0] - 2015-12-15 (Merry XMas Edition :-)
+#### Fixed
+- Android persist location when main activity was killed
+
+#### Changed
+- Android persisting position when debug is on
+
 ### [0.7.3] - 2015-11-06
 #### Fixed
 - Android issue #11

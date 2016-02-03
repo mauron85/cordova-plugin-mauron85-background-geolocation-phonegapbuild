@@ -1,5 +1,6 @@
 package com.tenforwardconsulting.cordova.bgloc;
 
+import java.util.ArrayList;
 import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.PendingIntent;
@@ -21,6 +22,9 @@ import com.google.android.gms.location.FusedLocationProviderApi;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.location.ActivityRecognitionResult;
 import static android.telephony.PhoneStateListener.*;
 
 import com.marianhello.cordova.bgloc.Constant;
@@ -30,44 +34,25 @@ public class FusedLocationService extends AbstractLocationService implements Goo
     private static final String TAG = "FusedLocationService";
 
     private PowerManager.WakeLock wakeLock;
+    private GoogleApiClient googleApiClient;
+    private PendingIntent detectedActivitiesPI;
 
-    private GoogleApiClient locationClientAPI;
-
-    private long lastUpdateTime = 0l;
-    private boolean running = false;
-    private boolean enabled = false;
-    private boolean startRecordingOnConnect = true;
-
-    private BroadcastReceiver actionReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Bundle data = intent.getExtras();
-            switch (data.getInt(Constant.ACTION)) {
-                case Constant.ACTION_START_RECORDING:
-                    startRecording();
-                    break;
-                case Constant.ACTION_STOP_RECORDING:
-                    stopRecording();
-                    break;
-                default:
-                    break;
-            }
-        }
-    };
+    private Boolean startRecordingOnConnect = true;
+    private Boolean isTracking = false;
+    private DetectedActivity lastActivity;
 
     @Override
     public void onCreate() {
         super.onCreate();
         Log.i(TAG, "OnCreate");
-        Log.d(TAG, "RUNNING JOSHUA'S MOD!!!!!!!!!!!!!!!");
-
-        // Receiver for actions
-        registerReceiver(actionReceiver, new IntentFilter(Constant.ACTION_FILTER));
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
-
         wakeLock.acquire();
+
+        Intent detectedActivitiesIntent = new Intent(Constant.DETECTED_ACTIVITY_UPDATE);
+        detectedActivitiesPI = PendingIntent.getBroadcast(this, 9002, detectedActivitiesIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        registerReceiver(detectedActivitiesReceiver, new IntentFilter(Constant.DETECTED_ACTIVITY_UPDATE));
 
         startRecording();
     }
@@ -75,6 +60,10 @@ public class FusedLocationService extends AbstractLocationService implements Goo
     @Override
     public void onLocationChanged(Location location) {
         Log.d(TAG, "- onLocationChanged" + location.toString());
+
+        if (lastActivity.getType() == DetectedActivity.STILL) {
+            stopTracking();
+        }
 
         if (config.isDebugging()) {
             Toast.makeText(FusedLocationService.this, "acy:" + location.getAccuracy() + ",v:" + location.getSpeed() + ",df:" + config.getDistanceFilter(), Toast.LENGTH_LONG).show();
@@ -92,14 +81,6 @@ public class FusedLocationService extends AbstractLocationService implements Goo
         handleLocation(location);
     }
 
-    private void enable() {
-        this.enabled = true;
-    }
-
-    private void disable() {
-        this.enabled = false;
-    }
-
     public void startRecording() {
         Log.d(TAG, "- locationUpdateReceiver STARTING RECORDING!!!!!!!!!!");
         this.startRecordingOnConnect = true;
@@ -112,44 +93,62 @@ public class FusedLocationService extends AbstractLocationService implements Goo
         detachRecorder();
     }
 
+    public void startTracking() {
+        if (isTracking) { return; }
+
+        Integer priority = translateDesiredAccuracy(config.getDesiredAccuracy());
+        LocationRequest locationRequest = LocationRequest.create()
+                .setPriority(priority) // this.accuracy
+                .setFastestInterval(config.getFastestInterval())
+                .setInterval(config.getInterval());
+                // .setSmallestDisplacement(config.getStationaryRadius());
+        LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient, locationRequest, this);
+        isTracking = true;
+        Log.d(TAG, "- locationUpdateReceiver NOW RECORDING!!!!!!!!!! with priority: "
+            + priority + ", fastestInterval: " + config.getFastestInterval() + ", interval: " + config.getInterval() + ", smallestDisplacement: " + config.getStationaryRadius());
+    }
+
+    public void stopTracking() {
+        if (!isTracking) { return; }
+
+        LocationServices.FusedLocationApi.removeLocationUpdates(googleApiClient, this);
+        isTracking = false;
+    }
+
     private void connectToPlayAPI() {
         Log.d(TAG, "- CONNECTING TO GOOGLE PLAY SERVICES API!!!!!!!!!!");
-        locationClientAPI =  new GoogleApiClient.Builder(this)
+        googleApiClient =  new GoogleApiClient.Builder(this)
                 .addApi(LocationServices.API)
+                .addApi(ActivityRecognition.API)
                 .addConnectionCallbacks(this)
                 //.addOnConnectionFailedListener(this)
                 .build();
-        locationClientAPI.connect();
+        googleApiClient.connect();
     }
 
     private void attachRecorder() {
-        if (locationClientAPI == null) {
+        if (googleApiClient == null) {
             connectToPlayAPI();
-        } else if (locationClientAPI.isConnected()) {
-            Integer priority = translateDesiredAccuracy(config.getDesiredAccuracy());
-            LocationRequest locationRequest = LocationRequest.create()
-                    .setPriority(priority) // this.accuracy
-                    .setFastestInterval(config.getFastestInterval())
-                    .setInterval(config.getInterval());
-                    // .setSmallestDisplacement(config.getStationaryRadius());
-            LocationServices.FusedLocationApi.requestLocationUpdates(locationClientAPI, locationRequest, this);
-            this.running = true;
-            Log.d(TAG, "- locationUpdateReceiver NOW RECORDING!!!!!!!!!! with priority: "
-                + priority + ", fastestInterval: " + config.getFastestInterval() + ", interval: " + config.getInterval() + ", smallestDisplacement: " + config.getStationaryRadius());
+        } else if (googleApiClient.isConnected()) {
+            ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(
+                googleApiClient,
+                config.getActivitiesInterval(),
+                detectedActivitiesPI
+            );
         } else {
-            locationClientAPI.connect();
+            googleApiClient.connect();
         }
     }
 
     private void detachRecorder() {
-        if (locationClientAPI == null) {
+        if (googleApiClient == null) {
             connectToPlayAPI();
-        } else if (locationClientAPI.isConnected()) {
-            LocationServices.FusedLocationApi.removeLocationUpdates(locationClientAPI, this);
-            this.running = false;
+        } else if (googleApiClient.isConnected()) {
+            ActivityRecognition.ActivityRecognitionApi.removeActivityUpdates(googleApiClient, detectedActivitiesPI);
+            stopTracking();
             Log.d(TAG, "- locationUpdateReceiver NO LONGER RECORDING!!!!!!!!!!");
         } else {
-            locationClientAPI.connect();
+            googleApiClient.connect();
         }
     }
 
@@ -165,7 +164,7 @@ public class FusedLocationService extends AbstractLocationService implements Goo
 
     @Override
     public void onConnectionSuspended(int cause) {
-        // locationClientAPI.connect();
+        // googleApiClient.connect();
         Log.i(TAG, "connection to Google Play Services suspended");
     }
 
@@ -202,30 +201,76 @@ public class FusedLocationService extends AbstractLocationService implements Goo
         return accuracy;
     }
 
-    @Override
-    public boolean stopService(Intent intent) {
-        Log.i(TAG, "- Received stop: " + intent);
-        this.stopRecording();
-        this.cleanUp();
-        if (config.isDebugging()) {
-            Toast.makeText(this, "Background location tracking stopped", Toast.LENGTH_SHORT).show();
+
+    public static DetectedActivity getProbableActivity(ArrayList<DetectedActivity> detectedActivities) {
+        int highestConfidence = 0;
+        DetectedActivity mostLikelyActivity = new DetectedActivity(0, DetectedActivity.UNKNOWN);
+
+        for(DetectedActivity da: detectedActivities) {
+            if(da.getType() != DetectedActivity.TILTING || da.getType() != DetectedActivity.UNKNOWN) {
+                Log.w(TAG, "Received a Detected Activity that was not tilting / unknown");
+                if (highestConfidence < da.getConfidence()) {
+                    highestConfidence = da.getConfidence();
+                    mostLikelyActivity = da;
+                }
+            }
         }
-        return super.stopService(intent);
+        return mostLikelyActivity;
     }
+
+    public static String getActivityString(int detectedActivityType) {
+          switch(detectedActivityType) {
+              case DetectedActivity.IN_VEHICLE:
+                  return "IN_VEHICLE";
+              case DetectedActivity.ON_BICYCLE:
+                  return "ON_BICYCLE";
+              case DetectedActivity.ON_FOOT:
+                  return "ON_FOOT";
+              case DetectedActivity.RUNNING:
+                  return "RUNNING";
+              case DetectedActivity.STILL:
+                  return "STILL";
+              case DetectedActivity.TILTING:
+                  return "TILTING";
+              case DetectedActivity.UNKNOWN:
+                  return "UNKNOWN";
+              case DetectedActivity.WALKING:
+                  return "WALKING";
+              default:
+                  return "Unknown";
+          }
+    }
+
+    private BroadcastReceiver detectedActivitiesReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
+            ArrayList<DetectedActivity> detectedActivities = (ArrayList) result.getProbableActivities();
+
+            //Find the activity with the highest percentage
+            lastActivity = getProbableActivity(detectedActivities);
+
+            Log.d(TAG, "MOST LIKELY ACTIVITY: " + getActivityString(lastActivity.getType()) + " " + lastActivity.getConfidence());
+
+            if (lastActivity.getType() == DetectedActivity.STILL) {
+                if (config.isDebugging()) {
+                    Toast.makeText(context, "Detected STILL Activity", Toast.LENGTH_SHORT).show();
+                }
+                // stopTracking();
+                // we will delay stop tracking after position is found
+            } else {
+                if (config.isDebugging()) {
+                    Toast.makeText(context, "Detected ACTIVE Activity", Toast.LENGTH_SHORT).show();
+                }
+                startTracking();
+            }
+            //else do nothing
+        }
+    };
 
     protected void cleanUp() {
-        // this.disable();
-        unregisterReceiver(actionReceiver);
-        locationClientAPI.disconnect();
-        stopForeground(true);
+        stopRecording();
+        googleApiClient.disconnect();
         wakeLock.release();
-    }
-
-    //@TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-    @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        this.stopRecording();
-        this.stopSelf();
-        super.onTaskRemoved(rootIntent);
     }
 }

@@ -96,7 +96,6 @@ public class DistanceFilterLocationService extends com.tenforwardconsulting.cord
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, TAG);
-
         wakeLock.acquire();
 
         // Location criteria
@@ -115,6 +114,14 @@ public class DistanceFilterLocationService extends com.tenforwardconsulting.cord
 
         //We want this service to continue running until it is explicitly stopped
         return START_REDELIVER_INTENT;
+    }
+
+    public void startRecording() {
+        Log.d(TAG, "- startRecording not implemented yet");
+    }
+
+    public void stopRecording() {
+        Log.d(TAG, "- stopRecording not implemented yet");
     }
 
     /**
@@ -395,7 +402,7 @@ public class DistanceFilterLocationService extends com.tenforwardconsulting.cord
     };
 
     /**
-    * Broadcast receiver which detcts a user has stopped for a long enough time to be determined as STOPPED
+    * Broadcast receiver which detects a user has stopped for a long enough time to be determined as STOPPED
     */
     private BroadcastReceiver stationaryAlarmReceiver = new BroadcastReceiver() {
         @Override
@@ -469,6 +476,8 @@ public class DistanceFilterLocationService extends com.tenforwardconsulting.cord
     }
 
     protected void cleanUp() {
+        Log.d(TAG, "cleanUp");
+
         locationManager.removeUpdates(this);
         alarmManager.cancel(stationaryAlarmPI);
         alarmManager.cancel(stationaryLocationPollingPI);
@@ -485,14 +494,15 @@ public class DistanceFilterLocationService extends com.tenforwardconsulting.cord
                 Log.w(TAG, "- Something bad happened while removing proximity-alert");
             }
         }
-        stopForeground(true);
         wakeLock.release();
     }
 
-    @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-    @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        this.stopSelf();
-        super.onTaskRemoved(rootIntent);
-    }
+    // @Override
+    // public void onTaskRemoved(Intent rootIntent) {
+    //     super.onTaskRemoved(rootIntent);
+    //     if (config.getStopOnTerminate() == false) {
+    //         stopSelf();
+    //         startDelayed();
+    //     }
+    // }
 }

@@ -3,7 +3,7 @@
 <plugin xmlns="http://www.phonegap.com/ns/plugins/1.0"
         xmlns:android="http://schemas.android.com/apk/res/android"
         id="cordova-plugin-mauron85-background-geolocation-phonegapbuild"
-        version="0.7.3">
+        version="0.9.4">
     <name>CDVBackgroundGeoLocation</name>
     <description>Cordova Background GeoLocation Plugin</description>
     <license>Apache-2.0</license>
@@ -27,7 +27,8 @@
         <source-file src="src/android/Config.java" target-dir="src/com/marianhello/cordova/bgloc"/>
         <source-file src="src/android/Constant.java" target-dir="src/com/marianhello/cordova/bgloc"/>
         <source-file src="src/android/ServiceProvider.java" target-dir="src/com/marianhello/cordova/bgloc"/>
-        <source-file src="src/android/BackgroundGpsPlugin.java" target-dir="src/com/tenforwardconsulting/cordova/bgloc"/>
+        <source-file src="src/android/PermissionHelper.java" target-dir="src/com/marianhello/cordova/bgloc"/>
+        <source-file src="src/android/BackgroundGeolocationPlugin.java" target-dir="src/com/tenforwardconsulting/cordova/bgloc"/>
         <source-file src="src/android/AbstractLocationService.java" target-dir="src/com/tenforwardconsulting/cordova/bgloc"/>
         <source-file src="src/android/DistanceFilterLocationService.java" target-dir="src/com/tenforwardconsulting/cordova/bgloc"/>
         <source-file src="src/android/FusedLocationService.java" target-dir="src/com/tenforwardconsulting/cordova/bgloc"/>
@@ -51,6 +52,7 @@
         </config-file>
 
         <config-file target="AndroidManifest.xml" parent="/manifest">
+            <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"/>
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
@@ -60,15 +62,15 @@
         </config-file>
         <config-file target="res/xml/config.xml" parent="/*">
             <feature name="BackgroundGeoLocation">
-                <param name="android-package" value="com.tenforwardconsulting.cordova.bgloc.BackgroundGpsPlugin"/>
+                <param name="android-package" value="com.tenforwardconsulting.cordova.bgloc.BackgroundGeolocationPlugin"/>
             </feature>
         </config-file>
+        <framework src="com.google.android.gms:play-services-location:+" />
+        <framework src="com.android.support:support-v4:+" />
     </platform>
 
     <platform name="ios">
         <!-- required background modes:  App registers for location updates -->
-        <dependency id="cordova-plugin-geolocation" />
-
         <config-file target="*-Info.plist" parent="NSLocationAlwaysUsageDescription">
             <string>This app requires background location tracking</string>
         </config-file>
@@ -84,6 +86,7 @@
                 <param name="ios-package" value="CDVBackgroundGeoLocation"/>
             </feature>
         </config-file>
+        <framework src="CoreLocation.framework" />
         <framework src="AudioToolbox.framework" weak="true" />
         <framework src="AVFoundation.framework" weak="true" />
         <source-file src="src/ios/CDVBackgroundGeoLocation.m" />
